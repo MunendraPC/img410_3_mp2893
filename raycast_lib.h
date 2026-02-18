@@ -42,4 +42,20 @@ typedef struct plane : sceneData {
     float normal[3];
 } plane;
 
+// function prototypes
+
+float dot3(const float a[3], const float b[3]);
+
+void normalize3(float v[3]);
+
+uint8_t toByte(float x);
+
+bool hitSphere(const float O[3], const float D[3], const sphere* s, float &tHit);
+
+bool hitPlane(const float O[3], const float D[3], const plane* p, float &tHit);
+
+bool readScene(char file[], sceneData* camera, sphere* spheres[], int* sphereCount, plane* planes[], int* planeCount);
+
+bool writeppm(const char* outFile, int Wid, int Height, const uint8_t* pix);
+
 #endif // RAYCAST_LIB_H
