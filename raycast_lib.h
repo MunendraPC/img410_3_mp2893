@@ -13,9 +13,9 @@
 
 typedef struct sceneData{
     std::string magicNum;
-    float c_diff[3];
-    float x, y, z;
 
+    float c_diff[3];      // diffuse color
+    float x, y, z;        // position for sphere/plane
 
 }sceneData;
 
