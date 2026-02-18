@@ -125,6 +125,20 @@ bool readscene(char file[], sceneData* camera, sphere* spheres[], int* sphereCou
     return true;
 }
 
+static bool write_ppm_p3(const char* outFile, int W, int H, const uint8_t* pix){
+    std::ofstream out(outFile);
+    if(!out.is_open()) return false;
+
+    out << "P3\n" << W << " " << H << "\n255\n";
+    for(int j=0;j<H;j++){
+        for(int i=0;i<W;i++){
+            int idx = (j*W + i) * 3;
+            out << (int)pix[idx] << " " << (int)pix[idx+1] << " " << (int)pix[idx+2] << "\n";
+        }
+    }
+    return true;
+}
+
 
 int main(int argc, char *argv[])
 {
