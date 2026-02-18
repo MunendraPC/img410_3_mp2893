@@ -1,6 +1,14 @@
 #include "raycast_lib.h"
 
-bool readscene(char file[], sceneData *scenedata){
+static void strip_semicolon(std::string &t){
+    if(!t.empty() && t.back() == ';') t.pop_back();
+}
+
+
+bool readscene(char file[], sceneData* camera, sphere* spheres[], int* sphereCount, plane* planes[], int* planeCount)
+{
+
+
     std::ifstream scene(file);
 
     if(!scene.is_open())
@@ -9,85 +17,146 @@ bool readscene(char file[], sceneData *scenedata){
         return false;
     }
 
-    scene >> scenedata->magicNum;
-    if (scenedata->magicNum != "img410")
-	{
-        std::cerr << "Error: Only img410 format supported\n";
+    camera->cam_width = 0.0f;
+    camera->cam_height = 0.0f;
+    *sphereCount = 0;
+    *planeCount = 0;
+
+    scene >> camera->magicNum;
+    if (camera->magicNum != "img410scene")
+    {
+        std::cerr << "Error: Only img410scene format supported\n";
         return false;
-	}
+    }
 
-    pixmap = new uint8_t[metadata->width * metadata.height * 3];
 	
-    std::string end;
-    std::string object;
-    int val = 0;
+        std::string tok;
 
-	while(scene >> end && end != "end"){
+    while(scene >> tok){
+        if(tok == "end") break;
 
-        // if the object is a sphere
-		if(end == "sphere"){
-			std::string property;
-			while(scene >> property && property != "sphere" && property != "camera" && property != "plane" && property != "end"){
-				if(property == "position"){
-					scene >> scenedata->x >> scenedata->y >> scenedata->z;
-				} else if(property == "radius"){
-					float r;
-					scene >> radius;
-				} else if(property == "color"){
-					int r, g, b;
-					scene >> r >> g >> b;
-				}
-			}
-			end = property;
-			if(end == "end") break;
-			continue;
 
-        // if the object is a camera
-		} else if(end == "camera"){
-			std::string property;
-			while(scene >> property && property != "sphere" && property != "camera" && property != "plane" && property != "end"){
-				if(property == "position"){
-					float x, y, z;
-					scene >> x >> y >> z;
-				} else if(property == "direction"){
-					float x, y, z;
-					scene >> x >> y >> z;
-				}
-			}
-			end = property;
-			if(end == "end") break;
-			continue;
-        // if the object is a plane
-		} else if(end == "plane"){
-			std::string property;
-			while(scene >> property && property != "sphere" && property != "camera" && property != "plane" && property != "end"){
-				if(property == "position"){
-					float x, y, z;
-					scene >> x >> y >> z;
-				} else if(property == "normal"){
-					float x, y, z;
-					scene >> x >> y >> z;
-				} else if(property == "color"){
-					int r, g, b;
-					scene >> r >> g >> b;
-				}
-			}
-			end = property;
-			if(end == "end") break;
-			continue;
-           
+        if(tok == "camera"){
+            std::string property;
+            while(scene >> property){
+                bool endObj = (!property.empty() && property.back() == ';');
+                strip_semicolon(property);
 
+                if(property == "width:"){
+                    scene >> camera->cam_width;
+                } else if(property == "height:"){
+                    scene >> camera->cam_height;
+                }
+
+                if(endObj) break;
+            }
         }
-	}
-} // hold in an array of ptrs, linked list, or static array (objects[])
+
+        else if(tok == "sphere"){
+            if(*sphereCount >= 128){
+                std::cerr << "Error: too many spheres\n";
+                return false;
+            }
+
+            sphere* s = new sphere();
+            // defaults
+            s->c_diff[0]=s->c_diff[1]=s->c_diff[2]=0.0f;
+            s->x=s->y=s->z=0.0f;
+            s->radius=0.0f;
+
+            std::string property;
+            while(scene >> property){
+                bool endObj = (!property.empty() && property.back() == ';');
+                strip_semicolon(property);
+
+                if(property == "c_diff:"){
+                    scene >> s->c_diff[0] >> s->c_diff[1] >> s->c_diff[2];
+                } else if(property == "position:"){
+                    scene >> s->x >> s->y >> s->z;
+                } else if(property == "radius:"){
+                    scene >> s->radius;
+                }
+
+                if(endObj) break;
+            }
+
+            spheres[*sphereCount] = s;
+            (*sphereCount)++;
+        }
+
+        else if(tok == "plane"){
+            if(*planeCount >= 128){
+                std::cerr << "Error: too many planes\n";
+                return false;
+            }
+
+            plane* p = new plane();
+            // defaults
+            p->c_diff[0]=p->c_diff[1]=p->c_diff[2]=0.0f;
+            p->x=p->y=p->z=0.0f;
+            p->normal[0]=p->normal[1]=p->normal[2]=0.0f;
+
+            std::string property;
+            while(scene >> property){
+                bool endObj = (!property.empty() && property.back() == ';');
+                strip_semicolon(property);
+
+                if(property == "c_diff:"){
+                    scene >> p->c_diff[0] >> p->c_diff[1] >> p->c_diff[2];
+                } else if(property == "position:"){
+                    scene >> p->x >> p->y >> p->z;
+                } else if(property == "normal:"){
+                    scene >> p->normal[0] >> p->normal[1] >> p->normal[2];
+                }
+
+                if(endObj) break;
+            }
+
+            planes[*planeCount] = p;
+            (*planeCount)++;
+        }
+
+        // unknown token: ignore
+        else {
+            // do nothing
+        }
+    }
+
+    return true;
+}
+
+static bool write_ppm_p3(const char* outFile, int W, int H, const uint8_t* pix){
+    std::ofstream out(outFile);
+    if(!out.is_open()) return false;
+
+    out << "P3\n" << W << " " << H << "\n255\n";
+    for(int j=0;j<H;j++){
+        for(int i=0;i<W;i++){
+            int idx = (j*W + i) * 3;
+            out << (int)pix[idx] << " " << (int)pix[idx+1] << " " << (int)pix[idx+2] << "\n";
+        }
+    }
+    return true;
+}
+
 
 int main(int argc, char *argv[])
 {
-    if(argc != 5){printf("Usage: raycast width height scene.scene output.ppm\n\n"); return 1;}
+    if(argc != 5){
+        printf("Usage: raycast width height scene.scene output.ppm\n\n");
+        return 1;
+    }
 
-    sceneData *scenedata[128];
-    readscene(argv[3], *scenedata);
+    sceneData camera;          // stores camera width/height + magicNum
+    sphere* spheres[128];
+    plane*  planes[128];
+    int sphereCount = 0;
+    int planeCount = 0;
 
+	
+    if(!readscene(argv[3], &camera, spheres, &sphereCount, planes, &planeCount)){
+        return 1;
+    }
 
     return 0;
 }
