@@ -24,7 +24,7 @@ typedef struct sceneData {
     ObjectType type;
 
     float c_diff[3];     
-    float position[3];   
+    float position[3]; 
 
     // camera properties
     float cam_width;
@@ -50,11 +50,11 @@ void normalize3(float v[3]);
 
 uint8_t toByte(float x);
 
-bool hitSphere(const float O[3], const float D[3], const sphere* s, float &tHit);
+bool hitSphere(const float O[3], const float D[3], sceneData* s, float &tHit);
 
-bool hitPlane(const float O[3], const float D[3], const plane* p, float &tHit);
+bool hitPlane(const float O[3], const float D[3], sceneData* p, float &tHit);
 
-bool readScene(char file[], sceneData* camera, sphere* spheres[], int* sphereCount, plane* planes[], int* planeCount);
+bool readScene(char file[], sceneData** Objects, sceneData* camera, int* objCount);
 
 bool writeppm(const char* outFile, int Wid, int Height, const uint8_t* pix);
 

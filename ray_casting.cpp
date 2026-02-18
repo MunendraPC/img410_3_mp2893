@@ -1,14 +1,4 @@
-// ray_casting.cpp  (FULL DROP-IN that matches the header your compiler is using)
-//
-// Your errors show:
-// - sphere/plane do NOT have x,y,z  -> they likely have position[3]
-// - sceneData does NOT have magicNum -> we read magic into a local std::string
-//
-// Assumes raycast_lib.h contains at least:
-//   sceneData: float c_diff[3]; float position[3]; float cam_width; float cam_height;
-//   sphere: float radius;
-//   plane:  float normal[3];
-
+// headers
 #include "raycast_lib.h"
 
 #include <iostream>
@@ -19,23 +9,18 @@
 #include <cstdint>
 #include <cstdlib>
 
-// ----------------- small helpers -----------------
-static void strip_semicolon(std::string &t){
-    if(!t.empty() && t.back() == ';') t.pop_back();
-}
-
-static float dot3(const float a[3], const float b[3]){
+float dot3(const float a[3], const float b[3]){
     return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
 }
 
-static void normalize3(float v[3]){
+void normalize3(float v[3]){
     float len = std::sqrt(dot3(v, v));
     if(len > 1e-6f){
         v[0] /= len; v[1] /= len; v[2] /= len;
     }
 }
 
-static uint8_t to_byte(float x){
+uint8_t toByte(float x){
     if(x < 0.0f) x = 0.0f;
     if(x > 1.0f) x = 1.0f;
     int v = (int)std::lround(x * 255.0f);
@@ -44,10 +29,11 @@ static uint8_t to_byte(float x){
     return (uint8_t)v;
 }
 
-// ----------------- intersections -----------------
-static bool hit_sphere(const float O[3], const float D[3], const sphere* s, float &tHit){
+// raycast hit sphere
+bool hitSphere(const float O[3], const float D[3], sceneData* s, float &tHit){
     float C[3] = { s->position[0], s->position[1], s->position[2] };
-    float r = s->radius;
+    sphere* spherePtr = static_cast<sphere*>(s);
+    float r = spherePtr->radius;
 
     float OC[3] = { O[0]-C[0], O[1]-C[1], O[2]-C[2] };
 
@@ -68,8 +54,10 @@ static bool hit_sphere(const float O[3], const float D[3], const sphere* s, floa
     return false;
 }
 
-static bool hit_plane(const float O[3], const float D[3], const plane* p, float &tHit){
-    float N[3] = { p->normal[0], p->normal[1], p->normal[2] };
+// raycast hit plane
+bool hitPlane(const float O[3], const float D[3], sceneData* p, float &tHit){
+    plane* planePtr = static_cast<plane*>(p);
+    float N[3] = { planePtr->normal[0], planePtr->normal[1], planePtr->normal[2] };
     normalize3(N);
 
     float P0[3] = { p->position[0], p->position[1], p->position[2] };
@@ -86,11 +74,8 @@ static bool hit_plane(const float O[3], const float D[3], const plane* p, float 
     return true;
 }
 
-// ----------------- scene reading -----------------
-bool readscene(char file[],
-               sceneData* camera,
-               sphere* spheres[], int* sphereCount,
-               plane* planes[], int* planeCount)
+// read scene
+bool readScene(char file[], sceneData** Objects, sceneData* camera, int* objCount)
 {
     std::ifstream scene(file);
     if(!scene.is_open()){
@@ -98,16 +83,13 @@ bool readscene(char file[],
         return false;
     }
 
-    // defaults
+    // defaults for camera
     camera->cam_width = 0.0f;
     camera->cam_height = 0.0f;
     camera->c_diff[0]=camera->c_diff[1]=camera->c_diff[2]=0.0f;
     camera->position[0]=camera->position[1]=camera->position[2]=0.0f;
+    camera->type = OBJ_CAMERA;
 
-    *sphereCount = 0;
-    *planeCount = 0;
-
-    // magic (do NOT store in sceneData; your header doesn't have magicNum)
     std::string magic;
     scene >> magic;
     if(magic != "img410scene"){
@@ -115,16 +97,16 @@ bool readscene(char file[],
         return false;
     }
 
-    std::string tok;
-    while(scene >> tok){
-        if(tok == "end") break;
+    std::string elem;
+    while(scene >> elem){
+        if(elem == "end") break;
 
-        // CAMERA
-        if(tok == "camera"){
+        // camera
+        if(elem == "camera"){
             std::string property;
             while(scene >> property){
                 bool endObj = (!property.empty() && property.back() == ';');
-                strip_semicolon(property);
+                if(!property.empty() && property.back() == ';') property.pop_back();
 
                 if(property == "width:"){
                     scene >> camera->cam_width;
@@ -136,98 +118,99 @@ bool readscene(char file[],
             }
         }
 
-        // SPHERE
-        else if(tok == "sphere"){
-            if(*sphereCount >= 128){
-                std::cerr << "Error: too many spheres\n";
+        // sphere
+        else if(elem == "sphere"){
+            if(*objCount >= 128){
+                std::cerr << "Error: too many objects\n";
                 return false;
             }
 
-            sphere* s = new sphere();
-            // defaults
-            s->c_diff[0]=s->c_diff[1]=s->c_diff[2]=0.0f;
-            s->position[0]=s->position[1]=s->position[2]=0.0f;
-            s->radius=0.0f;
+            sceneData* s = new sphere();
+            sphere* spherePtr = static_cast<sphere*>(s);
+            // defaults if elements are missing
+            spherePtr->c_diff[0]=spherePtr->c_diff[1]=spherePtr->c_diff[2]=0.0f;
+            spherePtr->position[0]=spherePtr->position[1]=spherePtr->position[2]=0.0f;  
+            spherePtr->radius = 0.0f;
+            spherePtr->type = OBJ_SPHERE;
 
             std::string property;
             while(scene >> property){
                 bool endObj = (!property.empty() && property.back() == ';');
-                strip_semicolon(property);
+                if(!property.empty() && property.back() == ';') property.pop_back();
 
                 if(property == "c_diff:"){
-                    scene >> s->c_diff[0] >> s->c_diff[1] >> s->c_diff[2];
+                    scene >> spherePtr->c_diff[0] >> spherePtr->c_diff[1] >> spherePtr->c_diff[2];
                 } else if(property == "position:"){
-                    scene >> s->position[0] >> s->position[1] >> s->position[2];
+                    scene >> spherePtr->position[0] >> spherePtr->position[1] >> spherePtr->position[2];
                 } else if(property == "radius:"){
-                    scene >> s->radius;
+                    scene >> spherePtr->radius;
                 }
 
                 if(endObj) break;
             }
 
-            spheres[*sphereCount] = s;
-            (*sphereCount)++;
+            Objects[*objCount] = s;
+            (*objCount)++;
         }
 
-        // PLANE
-        else if(tok == "plane"){
-            if(*planeCount >= 128){
-                std::cerr << "Error: too many planes\n";
+        // plane
+        else if(elem == "plane"){
+            if(*objCount >= 128){
+                std::cerr << "Error: too many objects\n";
                 return false;
             }
 
-            plane* p = new plane();
-            // defaults
-            p->c_diff[0]=p->c_diff[1]=p->c_diff[2]=0.0f;
-            p->position[0]=p->position[1]=p->position[2]=0.0f;
-            p->normal[0]=p->normal[1]=p->normal[2]=0.0f;
+            sceneData* p = new plane();
+            plane* planePtr = static_cast<plane*>(p);
+            // defaults if elements are missing
+            planePtr->c_diff[0]=planePtr->c_diff[1]=planePtr->c_diff[2]=0.0f;
+            planePtr->position[0]=planePtr->position[1]=planePtr->position[2]=0.0f;
+            planePtr->normal[0]=planePtr->normal[1]=planePtr->normal[2]=0.0f;
+            planePtr->type = OBJ_PLANE;
 
             std::string property;
             while(scene >> property){
                 bool endObj = (!property.empty() && property.back() == ';');
-                strip_semicolon(property);
+                if(!property.empty() && property.back() == ';') property.pop_back();
 
                 if(property == "c_diff:"){
-                    scene >> p->c_diff[0] >> p->c_diff[1] >> p->c_diff[2];
+                    scene >> planePtr->c_diff[0] >> planePtr->c_diff[1] >> planePtr->c_diff[2];
                 } else if(property == "position:"){
-                    scene >> p->position[0] >> p->position[1] >> p->position[2];
+                    scene >> planePtr->position[0] >> planePtr->position[1] >> planePtr->position[2];
                 } else if(property == "normal:"){
-                    scene >> p->normal[0] >> p->normal[1] >> p->normal[2];
-                    normalize3(p->normal);
+                    scene >> planePtr->normal[0] >> planePtr->normal[1] >> planePtr->normal[2];
+                    normalize3(planePtr->normal);
                 }
 
                 if(endObj) break;
             }
 
-            planes[*planeCount] = p;
-            (*planeCount)++;
+            Objects[*objCount] = p;
+            (*objCount)++;
         }
 
-        // unknown token: ignore
         else {
-            // do nothing
+            // do nothing if unrecognized or giberish
         }
     }
 
     return true;
 }
 
-// ----------------- ppm writer -----------------
-static bool write_ppm_p3(const char* outFile, int W, int H, const uint8_t* pix){
+bool writeppm(const char* outFile, int Wid, int Height, const uint8_t* pix){
     std::ofstream out(outFile);
     if(!out.is_open()) return false;
 
-    out << "P3\n" << W << " " << H << "\n255\n";
-    for(int j=0;j<H;j++){
-        for(int i=0;i<W;i++){
-            int idx = (j*W + i) * 3;
+    out << "P3\n" << Wid << " " << Height << "\n255\n";
+    for(int j=0;j<Height;j++){
+        for(int i=0;i<Wid;i++){
+            int idx = (j*Wid + i) * 3;
             out << (int)pix[idx] << " " << (int)pix[idx+1] << " " << (int)pix[idx+2] << "\n";
         }
     }
     return true;
 }
 
-// ----------------- main -----------------
 int main(int argc, char *argv[])
 {
     if(argc != 5){
@@ -235,71 +218,70 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    int W = std::atoi(argv[1]);
-    int H = std::atoi(argv[2]);
+    int Wid = std::atoi(argv[1]);
+    int Height = std::atoi(argv[2]);
 
+    sceneData** objects = new sceneData*[128];
+    int objCount = 0;
     sceneData camera;
-    sphere* spheres[128];
-    plane*  planes[128];
-    int sphereCount = 0;
-    int planeCount = 0;
 
-    if(!readscene(argv[3], &camera, spheres, &sphereCount, planes, &planeCount)){
+    if(!readScene(argv[3], objects, &camera, &objCount)){
         return 1;
     }
 
+    // confirm the cam wid and height are not zero
     if(camera.cam_width == 0.0f)  camera.cam_width = 1.0f;
     if(camera.cam_height == 0.0f) camera.cam_height = 1.0f;
 
-    uint8_t* pix = new uint8_t[W * H * 3];
+    // pixmap for ppm file
+    uint8_t* pix = new uint8_t[Wid * Height * 3];
 
-    // camera origin and view-plane
-    float O[3] = {0.0f, 0.0f, 0.0f};
-    float left = -camera.cam_width * 0.5f;
-    float top  =  camera.cam_height * 0.5f;
+    // camera origin
+    float Origin[3] = {0.0f, 0.0f, 0.0f};
 
-    for(int j=0;j<H;j++){
-        for(int i=0;i<W;i++){
-            float u = (i + 0.5f) / (float)W;
-            float v = (j + 0.5f) / (float)H;
+    // render scene
+    for(int j=0;j<Height;j++){
+        for(int i=0;i<Wid;i++){
+            float x = (i + 0.5f) / (float)Wid;
+            float y= (j + 0.5f) / (float)Height;
 
-            float D[3];
-            D[0] = left + u * camera.cam_width;
-            D[1] = top  - v * camera.cam_height;
-            D[2] = -1.0f;
-            normalize3(D);
+            float Rd[3];
+            Rd[0] = (-camera.cam_width * 0.5f) + x * camera.cam_width;
+            Rd[1] = (camera.cam_height * 0.5f)  - y * camera.cam_height;
+            Rd[2] = -1.0f;
+            normalize3(Rd);
 
-            float bestT = std::numeric_limits<float>::infinity();
+            float min_t = std::numeric_limits<float>::infinity();
             float bestColor[3] = {0.0f, 0.0f, 0.0f};
             bool hit = false;
 
-            for(int s=0;s<sphereCount;s++){
+            // intersection by object type
+            for(int s=0;s<objCount;s++){
                 float tHit;
-                if(hit_sphere(O, D, spheres[s], tHit) && tHit < bestT){
-                    bestT = tHit;
-                    bestColor[0] = spheres[s]->c_diff[0];
-                    bestColor[1] = spheres[s]->c_diff[1];
-                    bestColor[2] = spheres[s]->c_diff[2];
-                    hit = true;
+                if(objects[s]->type == OBJ_SPHERE){
+                    if(hitSphere(Origin, Rd, objects[s], tHit) && tHit < min_t){
+                        min_t = tHit;
+                        bestColor[0] = objects[s]->c_diff[0];
+                        bestColor[1] = objects[s]->c_diff[1];
+                        bestColor[2] = objects[s]->c_diff[2];
+                        hit = true;
+                    }
+                } else if(objects[s]->type == OBJ_PLANE){
+                    if(hitPlane(Origin, Rd, objects[s], tHit) && tHit < min_t){
+                        min_t = tHit;
+                        bestColor[0] = objects[s]->c_diff[0];
+                        bestColor[1] = objects[s]->c_diff[1];
+                        bestColor[2] = objects[s]->c_diff[2];
+                        hit = true;
+                    }
                 }
             }
 
-            for(int p=0;p<planeCount;p++){
-                float tHit;
-                if(hit_plane(O, D, planes[p], tHit) && tHit < bestT){
-                    bestT = tHit;
-                    bestColor[0] = planes[p]->c_diff[0];
-                    bestColor[1] = planes[p]->c_diff[1];
-                    bestColor[2] = planes[p]->c_diff[2];
-                    hit = true;
-                }
-            }
-
-            int idx = (j*W + i) * 3;
+            int idx = (j*Wid + i) * 3;
             if(hit){
-                pix[idx+0] = to_byte(bestColor[0]);
-                pix[idx+1] = to_byte(bestColor[1]);
-                pix[idx+2] = to_byte(bestColor[2]);
+                pix[idx+0] = toByte(bestColor[0]);
+                pix[idx+1] = toByte(bestColor[1]);
+                pix[idx+2] = toByte(bestColor[2]);
             } else {
                 pix[idx+0] = 0;
                 pix[idx+1] = 0;
@@ -308,17 +290,17 @@ int main(int argc, char *argv[])
         }
     }
 
-    if(!write_ppm_p3(argv[4], W, H, pix)){
+    // write ppm image and clean up memory
+    if(!writeppm(argv[4], Wid, Height, pix)){
         std::cerr << "Error: Could not write output file " << argv[4] << "\n";
         delete[] pix;
-        for(int i=0;i<sphereCount;i++) delete spheres[i];
-        for(int i=0;i<planeCount;i++) delete planes[i];
+        delete[] objects;
         return 1;
     }
 
     delete[] pix;
-    for(int i=0;i<sphereCount;i++) delete spheres[i];
-    for(int i=0;i<planeCount;i++) delete planes[i];
+    for(int s=0;s<objCount;s++) delete objects[s];
+    delete[] objects;
 
     return 0;
 }
