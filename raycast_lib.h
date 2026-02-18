@@ -11,24 +11,23 @@
 #include <string>
 #include <sstream>
 
-typedef struct sceneData{
-    std::string magicNum;
-    float c_diff[3];
-    float x, y, z;
+class SceneObject {
+public:
+    virtual ~SceneObject() = default;
 
+    virtual void render() = 0;   // or intersect(), update(), etc.
+};
 
-}sceneData;
-
-typedef struct sphere : sceneData{
+class sphere : SceneObject{
     float radius;
 
 
-}sphere;
+}
 
-typedef struct plane : sceneData{
+class plane : SceneObject{
     float normal;
 
-}sphere;
+}
 
 
 void  v3_from_points(float *dst, float *a, float *b);  
