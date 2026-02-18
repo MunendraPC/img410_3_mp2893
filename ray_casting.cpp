@@ -31,11 +31,9 @@ bool readscene(char file[], sceneData *scenedata){
 				if(property == "position"){
 					scene >> scenedata->x >> scenedata->y >> scenedata->z;
 				} else if(property == "radius"){
-					float r;
-					scene >> radius;
+					scene >> ->radius;
 				} else if(property == "color"){
-					int r, g, b;
-					scene >> r >> g >> b;
+					scene >> scenedata->c_diff[0] >> scenedata->c_diff[1] >> scenedata->c_diff[2];
 				}
 			}
 			end = property;
@@ -81,6 +79,30 @@ bool readscene(char file[], sceneData *scenedata){
 	}
 } // hold in an array of ptrs, linked list, or static array (objects[])
 
+void renderScene(){
+	/*for y in the image height
+		for x in the image width
+			R0 = {0,0,0}
+			Rd = {-1/2 camera_width + x * delta_x + offset (1/1000), // delta x camera_width/img_height 
+				 -1/2 camera_height + y * delta_y + offset (1/1000), // delta y camera_height/img_height
+				 -1}
+			normalize(rd);
+			
+			min_t = infinity;
+			intersection_obj = NULL;
+			
+			for object in object 
+				intersection with each object
+				object->intersect(R0, Rd) -> t0, t1
+				min_t = min(t0, t1) // write function to compare the t values
+				if min_t is updated then update intersection obj
+				pixmap[...] = intersection, c_diff <- float uint_8 -> x 225
+				// if no intersection, assign black*/
+}
+
+void write_ppm(){
+	// paste code
+}
 int main(int argc, char *argv[])
 {
     if(argc != 5){printf("Usage: raycast width height scene.scene output.ppm\n\n"); return 1;}

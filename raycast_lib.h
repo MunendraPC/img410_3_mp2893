@@ -22,6 +22,7 @@ class sphere : SceneObject{
     float radius;
 
 
+<<<<<<< Updated upstream
 }
 
 class plane : SceneObject{
@@ -31,6 +32,9 @@ class plane : SceneObject{
 
 
 void  v3_from_points(float *dst, float *a, float *b);  
+=======
+void  v3_from_points(float *dst, float *a, float *b);
+>>>>>>> Stashed changes
 void  v3_add(float *dst, float *a, float *b);
 void  v3_subtract(float *dst, float *a, float *b);
 float v3_dot_product(float *a, float *b);
