@@ -147,16 +147,95 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    sceneData camera;          // stores camera width/height + magicNum
+    int W = std::atoi(argv[1]);
+    int H = std::atoi(argv[2]);
+
+    sceneData camera;
     sphere* spheres[128];
     plane*  planes[128];
     int sphereCount = 0;
     int planeCount = 0;
 
-	
     if(!readscene(argv[3], &camera, spheres, &sphereCount, planes, &planeCount)){
         return 1;
     }
+
+    // if camera width/height missing, pick defaults
+    if(camera.cam_width == 0.0f)  camera.cam_width = 1.0f;
+    if(camera.cam_height == 0.0f) camera.cam_height = 1.0f;
+
+    // pixel buffer
+    uint8_t* pix = new uint8_t[W * H * 3];
+
+    // camera at origin, view plane at z=-1
+    float O[3] = {0.0f, 0.0f, 0.0f};
+    float left = -camera.cam_width * 0.5f;
+    float top  =  camera.cam_height * 0.5f;
+
+    for(int j=0;j<H;j++){
+        for(int i=0;i<W;i++){
+
+            // pixel center -> view plane
+            float u = (i + 0.5f) / (float)W;
+            float v = (j + 0.5f) / (float)H;
+
+            float D[3];
+            D[0] = left + u * camera.cam_width;
+            D[1] = top  - v * camera.cam_height;
+            D[2] = -1.0f;
+            normalize3(D);
+
+            float bestT = std::numeric_limits<float>::infinity();
+            float bestColor[3] = {0.0f, 0.0f, 0.0f};
+            bool hit = false;
+
+            // spheres
+            for(int s=0;s<sphereCount;s++){
+                float tHit;
+                if(hit_sphere(O, D, spheres[s], tHit) && tHit < bestT){
+                    bestT = tHit;
+                    bestColor[0] = spheres[s]->c_diff[0];
+                    bestColor[1] = spheres[s]->c_diff[1];
+                    bestColor[2] = spheres[s]->c_diff[2];
+                    hit = true;
+                }
+            }
+
+            // planes
+            for(int p=0;p<planeCount;p++){
+                float tHit;
+                if(hit_plane(O, D, planes[p], tHit) && tHit < bestT){
+                    bestT = tHit;
+                    bestColor[0] = planes[p]->c_diff[0];
+                    bestColor[1] = planes[p]->c_diff[1];
+                    bestColor[2] = planes[p]->c_diff[2];
+                    hit = true;
+                }
+            }
+
+            int idx = (j*W + i) * 3;
+            if(hit){
+                pix[idx+0] = to_byte(bestColor[0]);
+                pix[idx+1] = to_byte(bestColor[1]);
+                pix[idx+2] = to_byte(bestColor[2]);
+            } else {
+                pix[idx+0] = 0;
+                pix[idx+1] = 0;
+                pix[idx+2] = 0;
+            }
+        }
+    }
+
+    // write ppm
+    if(!write_ppm_p3(argv[4], W, H, pix)){
+        std::cerr << "Error: Could not write output file " << argv[4] << "\n";
+        return 1;
+    }
+
+    // cleanup
+    delete[] pix;
+    for(int i=0;i<sphereCount;i++) delete spheres[i];
+    for(int i=0;i<planeCount;i++) delete planes[i];
 
     return 0;
 }
