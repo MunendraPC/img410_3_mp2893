@@ -30,15 +30,15 @@ uint8_t toByte(float x){
 }
 
 // raycast hit sphere
-bool hitSphere(const float O[3], const float D[3], sceneData* s, float &tHit){
+bool hitSphere(const float Ro[3], const float Rd[3], sceneData* s, float &tHit){
     float C[3] = { s->position[0], s->position[1], s->position[2] };
     sphere* spherePtr = static_cast<sphere*>(s);
     float r = spherePtr->radius;
 
-    float OC[3] = { O[0]-C[0], O[1]-C[1], O[2]-C[2] };
+    float OC[3] = { Ro[0]-C[0], Ro[1]-C[1], Ro[2]-C[2] };
 
-    float a = dot3(D, D);
-    float b = 2.0f * dot3(OC, D);
+    float a = dot3(Rd, Rd);
+    float b = 2.0f * dot3(OC, Rd);
     float c = dot3(OC, OC) - r*r;
 
     float disc = b*b - 4.0f*a*c;
@@ -55,19 +55,19 @@ bool hitSphere(const float O[3], const float D[3], sceneData* s, float &tHit){
 }
 
 // raycast hit plane
-bool hitPlane(const float O[3], const float D[3], sceneData* p, float &tHit){
+bool hitPlane(const float Ro[3], const float Rd[3], sceneData* p, float &tHit){
     plane* planePtr = static_cast<plane*>(p);
-    float N[3] = { planePtr->normal[0], planePtr->normal[1], planePtr->normal[2] };
-    normalize3(N);
+    float Normal[3] = { planePtr->normal[0], planePtr->normal[1], planePtr->normal[2] };
+    normalize3(Normal);
 
     float P0[3] = { p->position[0], p->position[1], p->position[2] };
 
-    float denom = dot3(N, D);
+    float denom = dot3(Normal, Rd);
     const float EPS = 1e-6f;
     if(std::fabs(denom) < EPS) return false;
 
-    float P0O[3] = { P0[0]-O[0], P0[1]-O[1], P0[2]-O[2] };
-    float t = dot3(N, P0O) / denom;
+    float P0O[3] = { P0[0]-Ro[0], P0[1]-Ro[1], P0[2]-Ro[2] };
+    float t = dot3(Normal, P0O) / denom;
     if(t <= EPS) return false;
 
     tHit = t;
@@ -237,7 +237,7 @@ int main(int argc, char *argv[])
     uint8_t* pix = new uint8_t[Wid * Height * 3];
 
     // camera origin
-    float Origin[3] = {0.0f, 0.0f, 0.0f};
+    float Ro[3] = {0.0f, 0.0f, 0.0f};
 
     // render scene
     for(int j=0;j<Height;j++){
@@ -257,9 +257,9 @@ int main(int argc, char *argv[])
 
             // intersection by object type
             for(int s=0;s<objCount;s++){
-                float tHit;
+                float tHit = 0.0f;
                 if(objects[s]->type == OBJ_SPHERE){
-                    if(hitSphere(Origin, Rd, objects[s], tHit) && tHit < min_t){
+                    if(hitSphere(Ro, Rd, objects[s], tHit) && tHit < min_t){
                         min_t = tHit;
                         bestColor[0] = objects[s]->c_diff[0];
                         bestColor[1] = objects[s]->c_diff[1];
@@ -267,7 +267,7 @@ int main(int argc, char *argv[])
                         hit = true;
                     }
                 } else if(objects[s]->type == OBJ_PLANE){
-                    if(hitPlane(Origin, Rd, objects[s], tHit) && tHit < min_t){
+                    if(hitPlane(Ro, Rd, objects[s], tHit) && tHit < min_t){
                         min_t = tHit;
                         bestColor[0] = objects[s]->c_diff[0];
                         bestColor[1] = objects[s]->c_diff[1];
