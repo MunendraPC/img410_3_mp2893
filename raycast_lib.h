@@ -50,9 +50,9 @@ void normalize3(float v[3]);
 
 uint8_t toByte(float x);
 
-bool hitSphere(const float O[3], const float D[3], sceneData* s, float &tHit);
+bool hitSphere(const float Ro[3], const float Rd[3], sceneData* s, float &tHit);
 
-bool hitPlane(const float O[3], const float D[3], sceneData* p, float &tHit);
+bool hitPlane(const float Ro[3], const float Rd[3], sceneData* p, float &tHit);
 
 bool readScene(char file[], sceneData** Objects, sceneData* camera, int* objCount);
 
